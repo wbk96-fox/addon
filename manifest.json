@@ -1,0 +1,212 @@
+{
+  "name": "Polskie Źródła PL",
+  "version": "2.0.0",
+  "description": "Repozytorium scraperów JS dla NuvioTV: polskie serwisy (MaxVOD, SerialeVIP, Frixysubs, Docchi, Bajeczki24) oraz indeksy torrentów (apibay, EZTV, YTS, BitSearch, TorrentDownload, Nyaa). Priorytetyzacja językowa: lektor/dubbing PL -> obce audio z napisami PL -> reszta. Silnik resolverów (CDA, Streamtape, Sibnet, Vidmoly, Fsst, Vidara, Byse), rotacja UA, cookie jar, ponawianie, wykrywanie Cloudflare.",
+  "author": "NuvioTV PL",
+  "scrapers": [
+    {
+      "id": "torrent-tpb",
+      "name": "ThePirateBay (apibay)",
+      "description": "Torrenty filmów i seriali przez publiczne API apibay.org. Filtr S/E, ranking po seedach, dopasowanie IMDB.",
+      "version": "1.0.0",
+      "filename": "scrapers/torrent-tpb.js",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "enabled": true,
+      "logo": "https://apibay.org/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ],
+      "formats": [
+        "torrent"
+      ]
+    },
+    {
+      "id": "torrent-eztv",
+      "name": "EZTV",
+      "description": "Torrenty seriali po IMDB id z API EZTV (eztvx.to, zapasowo eztv.re). Precyzyjny filtr sezonu i odcinka.",
+      "version": "1.0.0",
+      "filename": "scrapers/torrent-eztv.js",
+      "supportedTypes": [
+        "tv"
+      ],
+      "enabled": true,
+      "logo": "https://eztvx.to/ezfavicon.ico",
+      "contentLanguage": [
+        "en"
+      ],
+      "formats": [
+        "torrent"
+      ]
+    },
+    {
+      "id": "torrent-yts",
+      "name": "YTS (mirrory)",
+      "description": "Torrenty filmów HD z API YTS. Automatyczny wybór działającego mirroru (yts.lt, yts.am, movies-api.accel.li).",
+      "version": "1.0.0",
+      "filename": "scrapers/torrent-yts.js",
+      "supportedTypes": [
+        "movie"
+      ],
+      "enabled": true,
+      "logo": "https://yts.lt/assets/images/website/favicon-yts.ico",
+      "contentLanguage": [
+        "en"
+      ],
+      "formats": [
+        "torrent"
+      ]
+    },
+    {
+      "id": "torrent-bitsearch",
+      "name": "BitSearch",
+      "description": "Metaindeks DHT bitsearch.to — duży zbiór torrentów bez rejestracji; hash wprost z wyników wyszukiwania.",
+      "version": "1.0.0",
+      "filename": "scrapers/torrent-bitsearch.js",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "enabled": true,
+      "logo": "https://bitsearch.to/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ],
+      "formats": [
+        "torrent"
+      ]
+    },
+    {
+      "id": "torrent-torrentdownload",
+      "name": "TorrentDownload",
+      "description": "Metaindeks torrentdownload.info — szybkie wyszukiwanie filmów i seriali, magnety budowane z hashy wyników.",
+      "version": "1.0.0",
+      "filename": "scrapers/torrent-torrentdownload.js",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "enabled": true,
+      "logo": "https://www.torrentdownload.info/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ],
+      "formats": [
+        "torrent"
+      ]
+    },
+    {
+      "id": "torrent-nyaa",
+      "name": "Nyaa (anime)",
+      "description": "Największy indeks torrentów anime (nyaa.si) — odcinki i paczki z napisami, magnety z trackerami, sortowanie po seedach.",
+      "version": "1.0.0",
+      "filename": "scrapers/torrent-nyaa.js",
+      "supportedTypes": [
+        "tv"
+      ],
+      "enabled": true,
+      "logo": "https://nyaa.si/static/img/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ],
+      "formats": [
+        "torrent"
+      ]
+    },
+    {
+      "id": "movie-maxvod",
+      "name": "MaxVOD",
+      "description": "Polskie filmy i seriale z maxvod.tv — player z SOURCE'ami 'video' -> bezpośrednie MP4 (Lektor PL/Dubbing PL/Napisy PL). Port przepływu FanFilm, zweryfikowane live.",
+      "version": "1.0.0",
+      "filename": "scrapers/movie-maxvod.js",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "enabled": true,
+      "logo": "https://maxvod.tv/favicon.ico",
+      "contentLanguage": [
+        "pl"
+      ],
+      "formats": [
+        "video"
+      ]
+    },
+    {
+      "id": "serial-serialevip",
+      "name": "SerialeVIP",
+      "description": "Polskie filmy i seriale z seriale.vip (DLE playlists): tory LEKTOR z embedami fsst/vidara rozwiązywanymi do bezpośrednich plików (mp4/m3u8).",
+      "version": "1.0.0",
+      "filename": "scrapers/serial-serialevip.js",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "enabled": true,
+      "logo": "https://seriale.vip/templates/serialvip/images/logo.png",
+      "contentLanguage": [
+        "pl"
+      ],
+      "formats": [
+        "video"
+      ]
+    },
+    {
+      "id": "bajki-bajeczki24",
+      "name": "Bajeczki24",
+      "description": "Polskie bajki i kreskówki (Meilisearch + strona -> embed bys* rozwiązywany resolverem Byse bez captcha; części pozycji wymagają captcha — wtedy pomijane).",
+      "version": "1.0.0",
+      "filename": "scrapers/bajki-bajeczki24.js",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "enabled": true,
+      "logo": "https://bajeczki24.pl/favicon.ico",
+      "contentLanguage": [
+        "pl"
+      ],
+      "formats": [
+        "video"
+      ]
+    },
+    {
+      "id": "anime-frixysubs",
+      "name": "Frixysubs",
+      "description": "Polskie fansuby anime z frixysubs.pl — API z odcinkami i bezpośrednimi plikami MP4/MKV (fileditch). Odtwarzalne bezpośrednio.",
+      "version": "1.0.0",
+      "filename": "scrapers/anime-frixysubs.js",
+      "supportedTypes": [
+        "tv"
+      ],
+      "enabled": true,
+      "logo": "https://frixysubs.pl/favicon.ico",
+      "contentLanguage": [
+        "pl"
+      ],
+      "formats": [
+        "video"
+      ]
+    },
+    {
+      "id": "anime-docchi",
+      "name": "Docchi",
+      "description": "Polskie anime z docchi.pl (API). Player Sibnet rozwiązywany do MP4; CDA wymaga cf_clearance w ustawieniach scrapera (Cloudflare).",
+      "version": "1.0.0",
+      "filename": "scrapers/anime-docchi.js",
+      "supportedTypes": [
+        "tv"
+      ],
+      "enabled": true,
+      "logo": "https://docchi.pl/favicon.ico",
+      "contentLanguage": [
+        "pl"
+      ],
+      "formats": [
+        "video"
+      ]
+    }
+  ]
+}
