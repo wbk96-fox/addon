@@ -105,6 +105,15 @@ var __K = (function () {
             if (!headers['User-Agent']) headers['User-Agent'] = ua(n - 1);
             if (!headers['Accept']) headers['Accept'] = 'text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8';
             if (!headers['Accept-Language']) headers['Accept-Language'] = 'pl-PL,pl;q=0.9,en;q=0.6';
+            // Client Hints — współczesne filtry antybotowe (Cloudflare itd.) flagują
+            // żądania Chrome bez nagłówków Sec-Ch-Ua.
+            var curUA = headers['User-Agent'];
+            if (/Chrome\/(\d+)/.test(curUA) && !headers['Sec-Ch-Ua']) {
+                var cv = (curUA.match(/Chrome\/(\d+)/) || [0, 131])[1];
+                headers['Sec-Ch-Ua'] = '"Chromium";v="' + cv + '", "Not_A Brand";v="24"';
+                headers['Sec-Ch-Ua-Mobile'] = /Android|Mobile/.test(curUA) ? '?1' : '?0';
+                headers['Sec-Ch-Ua-Platform'] = /Android/.test(curUA) ? '"Android"' : (/Macintosh/.test(curUA) ? '"macOS"' : '"Windows"');
+            }
             var ck = cookieHeader(url);
             if (ck && !headers['Cookie']) headers['Cookie'] = ck;
 
@@ -309,27 +318,51 @@ var __K = (function () {
 
     // --- Priorytety językowe (PL) ---------------------------------------------
     // 0 = polskie audio (lektor/dubbing), 1 = obce audio + polskie napisy,
-    // 2 = reszta. Wykrywa konwencje release'owe PL.
+    // 2 = reszta. Rozpoznaje konwencje release'owe PL (separator „ ", ".", "_",
+    // "-", nawiasy), lektor AI, oznaczenia scenowe (PLDUB/PLSUB) i samodzielne
+    // wielkie „PL" (np. „The.Matrix.1999.PL.720p.BluRay"); odrzuca domeny .pl.
     function plAudioInfo(name) {
         var n = String(name || '');
         var nl = n.toLowerCase();
         // audio PL
-        var isLektor = /\blektor(?:\s*(?:pl|polski|ai|eng))?\b|\bdi?lektor\b|\bldr\b(?=\s*(?:pl|polski))/.test(nl);
-        var isDub = /\bdubbing(?:\s*(?:pl|polski))?\b|\bdub(?:bing)?\s*pl\b|\bpl\s*dub\b|\bpl\.?dub(?:bing)?\b/.test(nl);
-        var isPolish = /\bpolish\b|\bpolski\b|\bpolska\s*(?:wersja|polszczyzna)|\bwersja\s*polska\b|\bmi(?:edzy)?narrator\b/.test(nl);
-        // samodzielne „PL" (np. „The Matrix 1999 PL 1080p") = zwykle audio PL
-        var isBarePL = /(^|[^a-z0-9])pl([^a-z0-9]|$)/.test(nl) && !/\bpl\.?(sub|napisy|lektor|dub)/.test(nl) && !/\.(?:pl|us)\b/.test(nl);
+        var isLektor = /\blektor(?:[\s._-]*(?:pl|polski(?:i|a|ie)?|ai|eng))?\b|\bdi?lektor\b|\bldr[\s._-]*(?:pl|polsk)/.test(nl);
+        var isDub = /\bdubbing(?:[\s._-]*(?:pl|polsk(?:i|a)?))?\b|\bdub(?:bing)?[\s._-]*pl\b|\bpl[\s._-]*dub(?:bing)?\b|\bpolsk(?:i|a)[\s._-]*dub|\bpolish[\s._-]*dub|\bpldub\b|\bai[\s._-]*dub\b/.test(nl);
+        var isPolish = /\bpolish\b|\bpolsk(?:i|a|ie)\b|\bpolska[\s._-]*(?:wersja|polszczyzna)|\bwersja[\s._-]*(?:językowa[\s._-]*)?polsk|\bmi(?:edzy)?narrator\b|\bnarrator[\s._-]*pl\b/.test(nl);
+        // samodzielne wielkie „PL" (konwencja scenowa: „1999.PL.720p") = zwykle audio PL;
+        // wykluczamy tylko forme domenowe: „coś.pl" na końcu nazwy, przed „/" lub spacją
+        // (np. „peb.pl", „www.torrentsite.pl download"). „PL" przed kropką i jakością
+        // („1999.PL.720p") to zawsze znacznik języka.
+        var isBarePL = /(^|[^a-zA-Z0-9])(?:PL|Pl|pl)(?![a-zA-Z0-9])/.test(n) &&
+            !/[a-z0-9-]+\.(?:PL|Pl|pl)(?![a-zA-Z0-9])(?:$|\/|\s)/.test(n);
         // napisy PL
-        var isPlSub = /\bnap(?:isy)?\.?\s*(?:pl|polskie)\b|\bpl\s*sub(?:s|bed|beds|tit(?:le|les))?\b|\bsub(?:s|bed)?\s*pl\b|\bnapisy\b(?=.*(pl|polsk))|\bpolish\s*sub(?:s|titles)?\b|\bpl\.?subbed\b/.test(nl);
+        var isPlSub = /\bnap(?:isy)?\.?[\s._-]*(?:pl|polskie)\b|\bpl[\s._-]*(?:sub(?:s|bed|beds|tit(?:le|les))?)\b|\bsub(?:s|bed)?[\s._-]*pl\b|\bnapisy\b(?=.*\b(?:pl|polsk))|\bpolish[\s._-]*sub(?:s|titles)?\b|\bplsub(?:bed|s)?\b|\bpl[\s._-]*nap(?:isy)?\b|\bsubtit(?:le|les)?[\s._-]*pl\b/.test(nl);
+        // samodzielne „PL" w pobliżu słowa „napisy" (np. „Matrix.Pl.2003.NAPISY.720p") = napisy
+        if (!isPlSub && isBarePL && /\bnap(?:isy)?\b/.test(nl)) isPlSub = true;
+        // sygnatury polskich grup ripperskich sceny/p2p — wydania niemal zawsze
+        // z polskim lektorem/dubbingiem lub polską ścieżką domyślną (-BiA, -BDC,
+        // -VOiCE, -MHT, -mhteam, -gsk, -wst, -ksc, -sav, -N000B itd.)
+        var plGroup = /-(?:BiA|BDC|VOiCE|VOICE|MHT(?:EAM)?|GSK|WST|KSC|SAV|GANDALF|EGAMI|G71|TIGER|NTB|NTb|N0+B|PTM|LTS|FaDDu)\b/.test(n);
+        // wydania MULTi z tagiem polskiej grupy = ścieżka PL w kontenerze
+        var multiPl = /\bMULT[iI]\b/.test(nl) && plGroup;
+        // polska ścieżka audio opisana po „PL": PL.5.1 / PL.AC3 / PL.EAC3 / PL.DD(+) / PL.DTS / PL.TrueHD
+        var plAudioTrack = /\bPL[\s._-]*(?:5\.1|7\.1|2\.0|AC3(?:\.?5\.1)?|E-?AC-?3|DD(?:\+|\.[0-9]|P[57]?\.[0-9])?|DTS(?:[-._]?(?:HD|X))?|TrueHD|FLAC|AAC|LPCM|PCM)\b/i.test(n);
+        // odwrotnie: kodek audio … kończąca etykieta PL (np. „TrueHD.7.1.Atmos.PL")
+        var plAudioTrack2 = /\b(?:TrueHD|Atmos|DD(?:P|\+)?|E-?AC-?3|AC3|DTS|FLAC|LPCM|PCM)[-._a-zA-Z0-9.]*\.(?:PL|Polish)(?![a-zA-Z0-9])(?![\s._-]*(?:sub|napisy))/i.test(n);
         var audio = null, subs = null;
         if (isLektor) audio = 'Lektor PL';
         else if (isDub) audio = 'Dubbing PL';
-        else if (isPolish || (isBarePL && !isPlSub)) audio = 'Polski';
+        else if (multiPl || plAudioTrack || plAudioTrack2) audio = 'Lektor PL'; // MULTi+grupa PL / PL.AC3 / kodek…PL
+        else if (plGroup) audio = 'Lektor PL'; // sygnatura polskiej grupy sceny/p2p
+        else if (isPolish || isBarePL) audio = 'Polski';
         if (isPlSub) subs = 'Napisy PL';
         var rank = 2;
         if (audio) rank = 0;
         else if (subs) rank = 1;
-        return { rank: rank, audio: audio, subs: subs, language: audio || subs || 'EN' };
+        // Przy audio PL i jednoczesnych napisach rozszerz etykietę.
+        var language = audio ? (subs ? audio + ' + ' + subs : audio) : (subs || 'EN');
+        // Bonus pewności (do wiarygodnej kolejności przy tym samym ranku):
+        var confidence = (audio ? 10 : 0) + (plGroup ? 2 : 0) + (multiPl ? 3 : 0) + (subs ? 1 : 0);
+        return { rank: rank, audio: audio, subs: subs, language: language, confidence: confidence, plGroup: plGroup };
     }
 
     // Stopień dla sortowania: najpierw rank językowy, potem seedery malejąco.
@@ -721,9 +754,137 @@ var __R = (function () {
                 if (uri.indexOf('/') === 0) uri = topRef + uri;
                 return { url: uri, quality: K.parseQuality(String(pick.label)), headers: headers };
             }
-            if (data && data.playback) { K.log('[byse] playback zaszyfrowany (AES-GCM) — pomijam'); return null; }
-            return null;
+            if (data && data.playback) { K.log('[byse] playback zaszyfrowany (AES-GCM) — fallback unpacker'); return filemoonUnpack(embedUrl); }
+            // brak źródeł — ostatnia deska ratunku: unpack strony osadzenia
+            return filemoonUnpack(embedUrl);
         } catch (e) { K.log('[byse] ' + e.message); return null; }
+    }
+
+    // --- Veev (veev.to / poophq / doods — port z FanFilm serialevip.py) ---------
+    // LZW dekodowanie ciasteczek „fc" z osadzenia -> /dl?op=player_api&cmd=gi
+    // -> dekodowanie URL-a z dv[0].s (unhexlify + odwracanie wg tablicy ch).
+    function veevLzwDecode(etext) {
+        var result = [], lut = {}, n = 256;
+        var c = etext.charAt(0);
+        result.push(c);
+        for (var i = 1; i < etext.length; i++) {
+            var ch = etext.charAt(i);
+            var code = etext.charCodeAt(i);
+            var nc = (code < 256) ? ch : (Object.prototype.hasOwnProperty.call(lut, code) ? lut[code] : c + c.charAt(0));
+            result.push(nc);
+            lut[n] = c + nc.charAt(0);
+            n += 1;
+            c = nc;
+        }
+        return result.join('');
+    }
+
+    function veevJsInt(x) { var v = parseInt(x, 10); return isNaN(v) ? 0 : v; }
+
+    function veevBuildArray(encoded) {
+        var d = [], c = encoded.split('');
+        var count = veevJsInt(c.shift());
+        while (count) {
+            var arr = [];
+            for (var i = 0; i < count; i++) arr.unshift(veevJsInt(c.shift()));
+            d.push(arr);
+            count = veevJsInt(c.shift());
+        }
+        return d;
+    }
+
+    function veevUnhex(h) {
+        var out = '';
+        for (var i = 0; i < h.length; i += 2) {
+            out += String.fromCharCode(parseInt(h.substr(i, 2), 16));
+        }
+        // decodeURIComponent(escape(...)) dla UTF-8:
+        try { return decodeURIComponent(escape(out)); } catch (e) { return out; }
+    }
+
+    function veevDecodeUrl(etext, tarray) {
+        var ds = etext;
+        for (var i = 0; i < tarray.length; i++) {
+            var t = tarray[i];
+            if (t === 1) ds = ds.split('').reverse().join('');
+            ds = veevUnhex(ds);
+            ds = ds.replace(/dXRmOA==/g, '');
+        }
+        return ds;
+    }
+
+    async function veev(embedUrl) {
+        try {
+            var r = await K.http(embedUrl, { headers: { 'Referer': embedUrl } });
+            if (!r.resp.ok) { K.log('[veev] HTTP ' + r.resp.status); return null; }
+            var finalUrl = r.resp.url || embedUrl;
+            var mediaId = finalUrl.replace(/\/+$/, '').split('/').pop();
+            var items = [];
+            var re = /[\.\s'](?:fc|_vvto\[[^\]]*)(?:['\]]*)?\s*[:=]\s*['"]([^'"]+)/g;
+            var m;
+            while ((m = re.exec(r.body)) !== null) items.push(m[1]);
+            for (var i = items.length - 1; i >= 0; i--) {
+                var cand = items[i];
+                var ch = veevLzwDecode(cand);
+                if (ch === cand) continue;
+                var dl = finalUrl.replace(/\/[^\/]*$/, '') + '/dl?op=player_api&cmd=gi&file_code=' +
+                    encodeURIComponent(mediaId) + '&ch=' + encodeURIComponent(ch) + '&ie=1';
+                var dr = await K.http(dl, { headers: { 'Referer': embedUrl } });
+                if (!dr.resp.ok) continue;
+                var j;
+                try { j = JSON.parse(dr.body); } catch (e2) { continue; }
+                var file = j && j.file;
+                if (file && file.file_status === 'OK' && file.dv && file.dv[0] && file.dv[0].s) {
+                    var s = veevDecodeUrl(veevLzwDecode(file.dv[0].s), veevBuildArray(ch)[0]);
+                    if (s) return { url: s, quality: K.parseQuality(s), headers: { 'Referer': embedUrl, 'User-Agent': K.ua(0) } };
+                }
+                return null;
+            }
+            return null;
+        } catch (e) { K.log('[veev] ' + e.message); return null; }
+    }
+
+    // --- Unpacker Dean Edwardsa (eval(function(p,a,c,k,e,d)...)) -----------------
+    // Odkodowanie zaciemnionych skryptów hostów wideo (filemoon i pokrewne).
+    function unpackPacked(text) {
+        var re = /eval\s*\(\s*function\s*\(([^)]*)\)\s*\{[\s\S]*?\}\s*\(\s*'(.*?)'\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*'(.*?)'\.split\s*\(\s*'(\|)'\s*\)/;
+        var m = text.match(re);
+        if (!m) return text;
+        var payload = m[2], radix = parseInt(m[3], 10), count = parseInt(m[4], 10);
+        var keys = m[5].split('|');
+        var unpad = function (s, r) {
+            var out = '';
+            var v = parseInt(s, r);
+            if (isNaN(v)) return s;
+            var digits = '0123456789abcdefghijklmnopqrstuvwxyz'.slice(0, r);
+            while (v > 0) { out = digits.charAt(v % r) + out; v = Math.floor(v / r); }
+            return out || '0';
+        };
+        for (var i = count - 1; i >= 0; i--) {
+            var token = keys[i] || '';
+            if (!token) continue;
+            var pat = new RegExp('\\b' + unpad(i.toString(radix), radix) + '\\b', 'g');
+            payload = payload.replace(pat, token);
+        }
+        return payload;
+    }
+
+    // Fallback dla hostów typu filemoon: jeśli API byse zawiedzie, szukamy
+    // zapakowanego skryptu i wyciągamy plik m3u8/mp4.
+    async function filemoonUnpack(embedUrl) {
+        try {
+            var r = await K.http(embedUrl, { headers: { 'Referer': embedUrl } });
+            if (!r.resp.ok) return null;
+            var html = unpackPacked(r.body);
+            var m = html.match(/file\s*:\s*["']([^"']+\.(?:m3u8|mp4)[^"']*)["']/) ||
+                    html.match(/src\s*:\s*["']([^"']+\.(?:m3u8|mp4)[^"']*)["']/);
+            if (m) {
+                var u = m[1];
+                if (u.indexOf('//') === 0) u = 'https:' + u;
+                return { url: u, quality: K.parseQuality(u), headers: { 'Referer': embedUrl, 'User-Agent': K.ua(0) } };
+            }
+            return null;
+        } catch (e) { K.log('[filemoon] ' + e.message); return null; }
     }
 
     // --- Router po domenie -------------------------------------------------------
@@ -737,6 +898,7 @@ var __R = (function () {
         if (/vidmoly/.test(h)) return vidmoly(embedUrl);
         if (/fsst\.online|fsst/.test(h)) return fsst(embedUrl);
         if (/vidara\.(to|so)/.test(h)) return vidara(embedUrl);
+        if (/veev\.to|poophq|doods\.pro/.test(h)) return veev(embedUrl);
         if (BYSE_DOMAINS.test(h)) return byse(embedUrl, parentReferer);
         K.log('[auto] brak resolvera dla ' + h);
         return null;
@@ -744,7 +906,7 @@ var __R = (function () {
 
     return {
         cda: cda, streamtape: streamtape, sibnet: sibnet, vidmoly: vidmoly,
-        fsst: fsst, vidara: vidara, byse: byse, auto: auto, sha256: sha256
+        fsst: fsst, vidara: vidara, veev: veev, byse: byse, filemoonUnpack: filemoonUnpack, unpackPacked: unpackPacked, auto: auto, sha256: sha256
     };
 })();
 

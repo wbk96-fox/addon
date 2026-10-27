@@ -8,12 +8,17 @@ module.exports = {
         if (!titles.length && !sub.phrase) return [];
         var primary = sub.phrase || titles[0];
 
+        var queries = sub.phrase ? [primary] : (titles.length > 1 ? [primary, titles[1], titles[0]] : [primary]);
         var html = '';
-        try {
-            var r = await K.http('https://www.torrentdownload.info/search?q=' + encodeURIComponent(primary));
-            if (!r.resp.ok || r.challenge) { K.log('[tdl] HTTP ' + r.resp.status + (r.challenge ? ' (CF)' : '')); return []; }
-            html = r.body;
-        } catch (e) { K.log('[tdl] ' + e.message); return []; }
+        for (var qi = 0; qi < queries.length; qi++) {
+            try {
+                var r = await K.http('https://www.torrentdownload.info/search?q=' + encodeURIComponent(queries[qi]));
+                if (!r.resp.ok || r.challenge) { K.log('[tdl] HTTP ' + r.resp.status + (r.challenge ? ' (CF)' : '')); continue; }
+                html = r.body;
+                if (html.indexOf('/td.php') >= 0 || /[A-F0-9a-f]{40}\//.test(html)) break; // wyniki obecne
+            } catch (e) { K.log('[tdl] ' + e.message); }
+        }
+        if (!html) return [];
 
         // Wiersz wyniku (układ potwierdzony): reklamy mają href /td.php lub pełne
         // URL-e — odfiltruje je wymóg ścieżki "/<HEX40>/<slug>".

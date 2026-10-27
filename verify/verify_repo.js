@@ -151,6 +151,65 @@ async function main() {
     }
   }
 
+  // Test regresyjny klasyfikacji językowej PL (regexy release'owe) — offline.
+  try {
+    const kernelSrc = fs.readFileSync(path.join(ROOT, 'tools/kernel.js'), 'utf8');
+    const K2 = new Function('fetch', 'console', kernelSrc + '\nreturn __K;')(() => {}, console);
+    const PL_CASES = [
+      ['The Matrix 1999 PL 1080p BluRay', 'Polski'],
+      ['The.Matrix.1999.PL.720p.BluRay.x264', 'Polski'],
+      ['Matrix PL LEKTOR 480p', 'Lektor PL'],
+      ['Matrix [Lektor PL] 1080p', 'Lektor PL'],
+      ['Matrix.Lektor.PL.1999.WEBRip', 'Lektor PL'],
+      ['Matrix Dubbing PL 4K', 'Dubbing PL'],
+      ['Matrix PLDUB 1080p', 'Dubbing PL'],
+      ['Matrix Dubbing 720p', 'Dubbing PL'],
+      ['Matrix PL DUB 720p', 'Dubbing PL'],
+      ['Matrix Napisy PL 1080p', 'Napisy PL'],
+      ['Matrix PL.SUBBED.2003', 'Napisy PL'],
+      ['Matrix PLSUB 720p', 'Napisy PL'],
+      ['Matrix Subs PL', 'Napisy PL'],
+      ['Matrix POLISH SUBS', 'Napisy PL'],
+      ['Matrix Lektor i Napisy PL', 'Lektor PL'],
+      ['Matrix Lektor AI 1080p', 'Lektor PL'],
+      ['Matrix PL Lektor ENG 720p', 'Lektor PL'],
+      ['peb.pl pobierz Matrix', 'EN'],
+      ['Matrix 1999 1080p BluRay x264-GRouP', 'EN'],
+      ['Matrix www.torrentsite.pl download', 'EN'],
+      ['Wersja polska: Matrix 1999', 'Polski'],
+      ['Matrix Polska Wersja 480p', 'Polski'],
+      ['Matrix POLISH DUB 1080p', 'Dubbing PL'],
+      ['Matrix lektor-pl 720p', 'Lektor PL'],
+      ['Matrix.Pl.2003.NAPISY.720p', 'Napisy PL'],
+      ['The Matrix 1999 PL SUBBED', 'Napisy PL'],
+      ['Matrix.DUBBING.POLSKI.1080p', 'Dubbing PL'],
+      ['Zabójca.PL.2019.PL.HDRip', 'Polski'],
+      ['Green.Book.2018.PL.720p.BluRay.x264', 'Polski'],
+      ['Matrix.MULTi.1080p.BluRay', 'EN'],
+      ['Harry.Potter.2001.1080p.BluRay.x264-BiA', 'Lektor PL'],
+      ['Gwiezdne.Wojny.1977.PL.1080p.BluRay.x264-BDC', 'Lektor PL'],
+      ['Gladiator.2000.POLISH.REPACK-BiA', 'Lektor PL'],
+      ['Film.2026.MULTi.1080p.BluRay.x264-BDC', 'Lektor PL'],
+      ['Serial.2025.MULTI.2160p.WEB-DL.H.265-MHTEAM', 'Lektor PL'],
+      ['The.Matrix.1999.1080p.BluRay.PL.AC3.5.1.x264', 'Lektor PL'],
+      ['Movie.2023.2160p.UHD.BluRay.TrueHD.7.1.Atmos.PL', 'Lektor PL'],
+      ['Film.2024.PL.DDP5.1.H.264-HDR', 'Lektor PL'],
+      ['Matrix.1999.PL.EAC3.1080p', 'Lektor PL'],
+      ['Movie.2020.DTS-HD.MA.5.1.x264', 'EN'],
+      ['Movie.2020.1080p.BluRay.x264-BiA-DOMiNO', 'Lektor PL'],
+      ['Movie.2020.1080p.WEB-DL.DDP5.1.H.264-NTb', 'Lektor PL']
+    ];
+    let plBad = 0;
+    for (const [nm, exp] of PL_CASES) {
+      const r = K2.plAudioInfo(nm);
+      const good = exp === 'EN' ? r.rank === 2 : r.language.indexOf(exp) >= 0;
+      if (!good) { plBad++; console.log('      -> detekcja PL:', JSON.stringify(nm), '=>', r.language, '(oczekiwano', exp + ')'); }
+    }
+    ok('klasyfikacja językowa PL (regexy release\'owe, grupy sceny, MULTi, kodeki)', plBad === 0, PL_CASES.length + ' przypadków');
+  } catch (e) {
+    ok('klasyfikacja językowa PL', false, e.message);
+  }
+
   // Kolejny plik scrapera w manifest powinien istnieć fizycznie — i odwrotnie.
   const disk = fs.readdirSync(path.join(ROOT, 'scrapers')).filter((f) => f.endsWith('.js'));
   const manifestFiles = scrapers.map((s) => path.basename(s.filename)).sort();

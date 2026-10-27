@@ -8,13 +8,17 @@ module.exports = {
         if (!titles.length && !sub.phrase) return [];
         var primary = sub.phrase || titles[0];
         var q = primary + (sub.year && !sub.phrase ? ' ' + sub.year : '');
-
+        var queries = sub.phrase ? [q] : (titles.length > 1 ? [q, titles[1] + (sub.year ? ' ' + sub.year : ''), titles[0]] : [q]);
         var html = '';
-        try {
-            var r = await K.http('https://bitsearch.to/search?q=' + encodeURIComponent(q) + '&sort=-seeders');
-            if (!r.resp.ok || r.challenge) { K.log('[bitsearch] HTTP ' + r.resp.status + (r.challenge ? ' (CF)' : '')); return []; }
-            html = r.body;
-        } catch (e) { K.log('[bitsearch] ' + e.message); return []; }
+        for (var qi = 0; qi < queries.length; qi++) {
+            try {
+                var r = await K.http('https://bitsearch.to/search?q=' + encodeURIComponent(queries[qi]) + '&sort=-seeders');
+                if (!r.resp.ok || r.challenge) { K.log('[bitsearch] HTTP ' + r.resp.status + (r.challenge ? ' (CF)' : '')); continue; }
+                html = r.body;
+                if (html.indexOf('/download/torrent/') >= 0) break; // trafienie — koniec zapasów
+            } catch (e) { K.log('[bitsearch] ' + e.message); }
+        }
+        if (!html) return [];
 
         // Wynik (układ potwierdzony): <h3><a>TYTUŁ</a></h3> ... meta(size/date)
         // ... swarm(seeders/leechers) ... NA KOŃCU link /download/torrent/<HASH>.

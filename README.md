@@ -40,12 +40,36 @@ crypto-js). Obejmuje polskie serwisy anime **bez gotowych scraperów** oraz
 | **Docchi** | docchi.pl — JSON API | **anime PL** | ⚠️ Sibnet→MP4, CDA wymaga `cf_clearance` |
 
 **Priorytetyzacja językowa (wszystkie scrapery torrentów + PL):**
-1. audio PL — „Lektor PL", „Dubbing PL", „PL" (konwencje release'owe: `LEKTOR`,
-   `PL.720p`, `PLDUB`, `Dubbing PL`, `POLISH` itd.),
-2. obce audio + polskie napisy — `Napisy PL`, `PL.SUB`, `PL SUBBED`,
+1. audio PL — „Lektor PL", „Dubbing PL", samodzielne „PL" (konwencje release'owe:
+   `LEKTOR`, `Lektor.PL`, `lektor-pl`, `Lektor AI`, `PLDUB`, `Dubbing.POLSKI`,
+   `POLISH DUB`, `PL DUB`, `1999.PL.720p`, `Wersja polska` itd.),
+2. obce audio + polskie napisy — `Napisy PL`, `NAPISY`, `PL.SUB`, `PLSUB`,
+   `PL SUBBED`, `Subs PL`, `POLISH SUBS`, `Matrix.Pl.2003.NAPISY` itd.,
 3. reszta.
 Sortowanie: rank językowy → seedery → trafność tytułu; pole `language` przyjmuje
-wartości „Lektor PL" / „Dubbing PL" / „Polski" / „Napisy PL" / „EN".
+wartości „Lektor PL" / „Dubbing PL" / „Polski" / „Lektor PL + Napisy PL" /
+„Napisy PL" / „EN". Domeny `.pl` („peb.pl", „www.x.pl") są odróżniane od
+znaczników języka. Zestaw 42 przypadków brzegowych jest testowany offline
+przy każdej weryfikacji (`verify_repo.js`, test regresyjny).
+
+**Sygnatury polskich grup sceny/p2p** (`-BiA`, `-BDC`, `-VOiCE`, `-MHT/-MHTeam`,
+`-GSK`, `-WST`, `-KSC`, `-SAV`, `-EGAMI`, `-NTb` itd.) podnoszą wynik do audio PL,
+podobnie jak wydania **MULTi z polską grupą** oraz **tagi ścieżek audio**:
+`PL.AC3`, `PL.EAC3`, `PL.DDP5.1`, `TrueHD.7.1.Atmos.PL` (przykłady sceny 2026:
+`Gladiator.2000.POLISH.REPACK-BiA` → „Lektor PL"). Wydania łączone dostają
+etykietę „Lektor PL + Napisy PL".
+
+**Client Hints:** żądania z silnika Chrome dostawiają nagłówki `Sec-Ch-Ua`,
+`Sec-Ch-Ua-Mobile` i `Sec-Ch-Ua-Platform` zgodne z wersją w UA — nowoczesne
+filtry antybotowe flagują Chrome bez tych nagłówków.
+
+**Unpacker Dean Edwardsa** (`p,a,c,k,e,d`) w silniku resolverów: jako fallback
+gdy API hostów typu bys*/filemoon zawiedzie — odkodowuje zaciemnione skrypty
+i wyciąga bezpośrednie m3u8/mp4.
+
+**Wyszukiwanie wielotytułowe:** scrapery torrentów odpytują źródła po PL tytule,
+tytule oryginalnym i aliasach z TMDB (`alternative_titles`) — polskie tytuły
+release'ów z lektorem trafiają więc do wyników (w aplikacji, z kluczem TMDB).
 
 **Silnik resolverów** (`tools/resolvers.js`, porty z ResolveURL/FanFilm 2026):
 CDA (`player_data` + dekodowanie znaków + `?wersja=`), Streamtape (`robotlink`),
@@ -113,7 +137,7 @@ Weryfikator replikuje ścieżkę aplikacji: manifest → pobranie plików → op
 `(function(){...})()` → `getStreams` → walidacja jak `parseJsonResults`
 (`url` niepusty, typy pól), dodatkowo spójność manifest↔pliki i testy LIVE.
 
-Ostatni wynik (2026-10-26, 11 scraperów): **WSZYSTKIE KONTROLE OK** (testy LIVE włącznie).
+Ostatni wynik (2026-10-27, 11 scraperów, v2.2.0): **WSZYSTKIE KONTROLE OK** (testy LIVE włącznie).
 
 ## Ograniczenia (uczciwie)
 

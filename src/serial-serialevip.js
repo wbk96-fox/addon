@@ -109,6 +109,7 @@ module.exports = {
             var hst = (it.embed.match(/^https?:\/\/([^\/]+)/) || [''])[1] || '';
             if (/fsst/.test(hst)) resolved = await __R.fsst(it.embed);
             else if (/vidara/.test(hst)) resolved = await __R.vidara(it.embed);
+            else if (/veev\.to|poophq|doods/.test(hst)) resolved = await __R.veev(it.embed);
             else { K.log('[serialevip] pomijam host: ' + hst); continue; }
             if (!resolved) continue;
 

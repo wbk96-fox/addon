@@ -6,22 +6,20 @@ module.exports = {
         var sub = await K.resolveSubject(tmdbId, mediaType);
         var titles = sub.titles || [];
         if (!titles.length && !sub.phrase) return [];
-        var primary = sub.phrase || titles[0];
 
-        // apibay: q.php z kategorią (207=HD movies, 205=TV) lub bez (204=Movies, 208=HD-TV).
+        // Zapytania wielotytułowe: fraza testowa albo PL + oryginał + aliasy z TMDB
+        // (apibay indeksuje polskie tytuły release'ów z lektorem).
+        var queries = sub.phrase ? [sub.phrase] : titles.slice(0, 3);
         var cats = (String(mediaType).toLowerCase() === 'movie') ? ['207', '204', ''] : ['205', '208', ''];
-        var list = null;
-        for (var c = 0; c < cats.length && !list; c++) {
-            var url = 'https://apibay.org/q.php?q=' + encodeURIComponent(primary) + (cats[c] ? '&cat=' + cats[c] : '');
-            try {
-                var j = await K.httpJSON(url);
-                if (Array.isArray(j) && j.length && !j[0].no_results) list = j;
-            } catch (e) { K.log('[tpb] kategoria ' + cats[c] + ' nieudana: ' + e.message); }
-        }
-        if (!list) {
-            // Ostateczność: zapytanie bez kategorii po drugim tytule/aliasie.
-            var alt = titles[1] || primary;
-            try { var j2 = await K.httpJSON('https://apibay.org/q.php?q=' + encodeURIComponent(alt)); if (Array.isArray(j2) && j2.length && !j2[0].no_results) list = j2; } catch (e2) {}
+        var list = null, usedQuery = null;
+        for (var qi = 0; qi < queries.length && !list; qi++) {
+            for (var c = 0; c < cats.length && !list; c++) {
+                var url = 'https://apibay.org/q.php?q=' + encodeURIComponent(queries[qi]) + (cats[c] ? '&cat=' + cats[c] : '');
+                try {
+                    var j = await K.httpJSON(url);
+                    if (Array.isArray(j) && j.length && !j[0].no_results) { list = j; usedQuery = queries[qi]; }
+                } catch (e) { K.log('[tpb] kategoria ' + cats[c] + ' nieudana: ' + e.message); }
+            }
         }
         if (!list) return [];
 

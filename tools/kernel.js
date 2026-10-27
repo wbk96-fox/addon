@@ -102,6 +102,15 @@ var __K = (function () {
             if (!headers['User-Agent']) headers['User-Agent'] = ua(n - 1);
             if (!headers['Accept']) headers['Accept'] = 'text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8';
             if (!headers['Accept-Language']) headers['Accept-Language'] = 'pl-PL,pl;q=0.9,en;q=0.6';
+            // Client Hints — współczesne filtry antybotowe (Cloudflare itd.) flagują
+            // żądania Chrome bez nagłówków Sec-Ch-Ua.
+            var curUA = headers['User-Agent'];
+            if (/Chrome\/(\d+)/.test(curUA) && !headers['Sec-Ch-Ua']) {
+                var cv = (curUA.match(/Chrome\/(\d+)/) || [0, 131])[1];
+                headers['Sec-Ch-Ua'] = '"Chromium";v="' + cv + '", "Not_A Brand";v="24"';
+                headers['Sec-Ch-Ua-Mobile'] = /Android|Mobile/.test(curUA) ? '?1' : '?0';
+                headers['Sec-Ch-Ua-Platform'] = /Android/.test(curUA) ? '"Android"' : (/Macintosh/.test(curUA) ? '"macOS"' : '"Windows"');
+            }
             var ck = cookieHeader(url);
             if (ck && !headers['Cookie']) headers['Cookie'] = ck;
 
@@ -306,27 +315,51 @@ var __K = (function () {
 
     // --- Priorytety językowe (PL) ---------------------------------------------
     // 0 = polskie audio (lektor/dubbing), 1 = obce audio + polskie napisy,
-    // 2 = reszta. Wykrywa konwencje release'owe PL.
+    // 2 = reszta. Rozpoznaje konwencje release'owe PL (separator „ ", ".", "_",
+    // "-", nawiasy), lektor AI, oznaczenia scenowe (PLDUB/PLSUB) i samodzielne
+    // wielkie „PL" (np. „The.Matrix.1999.PL.720p.BluRay"); odrzuca domeny .pl.
     function plAudioInfo(name) {
         var n = String(name || '');
         var nl = n.toLowerCase();
         // audio PL
-        var isLektor = /\blektor(?:\s*(?:pl|polski|ai|eng))?\b|\bdi?lektor\b|\bldr\b(?=\s*(?:pl|polski))/.test(nl);
-        var isDub = /\bdubbing(?:\s*(?:pl|polski))?\b|\bdub(?:bing)?\s*pl\b|\bpl\s*dub\b|\bpl\.?dub(?:bing)?\b/.test(nl);
-        var isPolish = /\bpolish\b|\bpolski\b|\bpolska\s*(?:wersja|polszczyzna)|\bwersja\s*polska\b|\bmi(?:edzy)?narrator\b/.test(nl);
-        // samodzielne „PL" (np. „The Matrix 1999 PL 1080p") = zwykle audio PL
-        var isBarePL = /(^|[^a-z0-9])pl([^a-z0-9]|$)/.test(nl) && !/\bpl\.?(sub|napisy|lektor|dub)/.test(nl) && !/\.(?:pl|us)\b/.test(nl);
+        var isLektor = /\blektor(?:[\s._-]*(?:pl|polski(?:i|a|ie)?|ai|eng))?\b|\bdi?lektor\b|\bldr[\s._-]*(?:pl|polsk)/.test(nl);
+        var isDub = /\bdubbing(?:[\s._-]*(?:pl|polsk(?:i|a)?))?\b|\bdub(?:bing)?[\s._-]*pl\b|\bpl[\s._-]*dub(?:bing)?\b|\bpolsk(?:i|a)[\s._-]*dub|\bpolish[\s._-]*dub|\bpldub\b|\bai[\s._-]*dub\b/.test(nl);
+        var isPolish = /\bpolish\b|\bpolsk(?:i|a|ie)\b|\bpolska[\s._-]*(?:wersja|polszczyzna)|\bwersja[\s._-]*(?:językowa[\s._-]*)?polsk|\bmi(?:edzy)?narrator\b|\bnarrator[\s._-]*pl\b/.test(nl);
+        // samodzielne wielkie „PL" (konwencja scenowa: „1999.PL.720p") = zwykle audio PL;
+        // wykluczamy tylko forme domenowe: „coś.pl" na końcu nazwy, przed „/" lub spacją
+        // (np. „peb.pl", „www.torrentsite.pl download"). „PL" przed kropką i jakością
+        // („1999.PL.720p") to zawsze znacznik języka.
+        var isBarePL = /(^|[^a-zA-Z0-9])(?:PL|Pl|pl)(?![a-zA-Z0-9])/.test(n) &&
+            !/[a-z0-9-]+\.(?:PL|Pl|pl)(?![a-zA-Z0-9])(?:$|\/|\s)/.test(n);
         // napisy PL
-        var isPlSub = /\bnap(?:isy)?\.?\s*(?:pl|polskie)\b|\bpl\s*sub(?:s|bed|beds|tit(?:le|les))?\b|\bsub(?:s|bed)?\s*pl\b|\bnapisy\b(?=.*(pl|polsk))|\bpolish\s*sub(?:s|titles)?\b|\bpl\.?subbed\b/.test(nl);
+        var isPlSub = /\bnap(?:isy)?\.?[\s._-]*(?:pl|polskie)\b|\bpl[\s._-]*(?:sub(?:s|bed|beds|tit(?:le|les))?)\b|\bsub(?:s|bed)?[\s._-]*pl\b|\bnapisy\b(?=.*\b(?:pl|polsk))|\bpolish[\s._-]*sub(?:s|titles)?\b|\bplsub(?:bed|s)?\b|\bpl[\s._-]*nap(?:isy)?\b|\bsubtit(?:le|les)?[\s._-]*pl\b/.test(nl);
+        // samodzielne „PL" w pobliżu słowa „napisy" (np. „Matrix.Pl.2003.NAPISY.720p") = napisy
+        if (!isPlSub && isBarePL && /\bnap(?:isy)?\b/.test(nl)) isPlSub = true;
+        // sygnatury polskich grup ripperskich sceny/p2p — wydania niemal zawsze
+        // z polskim lektorem/dubbingiem lub polską ścieżką domyślną (-BiA, -BDC,
+        // -VOiCE, -MHT, -mhteam, -gsk, -wst, -ksc, -sav, -N000B itd.)
+        var plGroup = /-(?:BiA|BDC|VOiCE|VOICE|MHT(?:EAM)?|GSK|WST|KSC|SAV|GANDALF|EGAMI|G71|TIGER|NTB|NTb|N0+B|PTM|LTS|FaDDu)\b/.test(n);
+        // wydania MULTi z tagiem polskiej grupy = ścieżka PL w kontenerze
+        var multiPl = /\bMULT[iI]\b/.test(nl) && plGroup;
+        // polska ścieżka audio opisana po „PL": PL.5.1 / PL.AC3 / PL.EAC3 / PL.DD(+) / PL.DTS / PL.TrueHD
+        var plAudioTrack = /\bPL[\s._-]*(?:5\.1|7\.1|2\.0|AC3(?:\.?5\.1)?|E-?AC-?3|DD(?:\+|\.[0-9]|P[57]?\.[0-9])?|DTS(?:[-._]?(?:HD|X))?|TrueHD|FLAC|AAC|LPCM|PCM)\b/i.test(n);
+        // odwrotnie: kodek audio … kończąca etykieta PL (np. „TrueHD.7.1.Atmos.PL")
+        var plAudioTrack2 = /\b(?:TrueHD|Atmos|DD(?:P|\+)?|E-?AC-?3|AC3|DTS|FLAC|LPCM|PCM)[-._a-zA-Z0-9.]*\.(?:PL|Polish)(?![a-zA-Z0-9])(?![\s._-]*(?:sub|napisy))/i.test(n);
         var audio = null, subs = null;
         if (isLektor) audio = 'Lektor PL';
         else if (isDub) audio = 'Dubbing PL';
-        else if (isPolish || (isBarePL && !isPlSub)) audio = 'Polski';
+        else if (multiPl || plAudioTrack || plAudioTrack2) audio = 'Lektor PL'; // MULTi+grupa PL / PL.AC3 / kodek…PL
+        else if (plGroup) audio = 'Lektor PL'; // sygnatura polskiej grupy sceny/p2p
+        else if (isPolish || isBarePL) audio = 'Polski';
         if (isPlSub) subs = 'Napisy PL';
         var rank = 2;
         if (audio) rank = 0;
         else if (subs) rank = 1;
-        return { rank: rank, audio: audio, subs: subs, language: audio || subs || 'EN' };
+        // Przy audio PL i jednoczesnych napisach rozszerz etykietę.
+        var language = audio ? (subs ? audio + ' + ' + subs : audio) : (subs || 'EN');
+        // Bonus pewności (do wiarygodnej kolejności przy tym samym ranku):
+        var confidence = (audio ? 10 : 0) + (plGroup ? 2 : 0) + (multiPl ? 3 : 0) + (subs ? 1 : 0);
+        return { rank: rank, audio: audio, subs: subs, language: language, confidence: confidence, plGroup: plGroup };
     }
 
     // Stopień dla sortowania: najpierw rank językowy, potem seedery malejąco.

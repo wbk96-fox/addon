@@ -331,9 +331,137 @@ var __R = (function () {
                 if (uri.indexOf('/') === 0) uri = topRef + uri;
                 return { url: uri, quality: K.parseQuality(String(pick.label)), headers: headers };
             }
-            if (data && data.playback) { K.log('[byse] playback zaszyfrowany (AES-GCM) — pomijam'); return null; }
-            return null;
+            if (data && data.playback) { K.log('[byse] playback zaszyfrowany (AES-GCM) — fallback unpacker'); return filemoonUnpack(embedUrl); }
+            // brak źródeł — ostatnia deska ratunku: unpack strony osadzenia
+            return filemoonUnpack(embedUrl);
         } catch (e) { K.log('[byse] ' + e.message); return null; }
+    }
+
+    // --- Veev (veev.to / poophq / doods — port z FanFilm serialevip.py) ---------
+    // LZW dekodowanie ciasteczek „fc" z osadzenia -> /dl?op=player_api&cmd=gi
+    // -> dekodowanie URL-a z dv[0].s (unhexlify + odwracanie wg tablicy ch).
+    function veevLzwDecode(etext) {
+        var result = [], lut = {}, n = 256;
+        var c = etext.charAt(0);
+        result.push(c);
+        for (var i = 1; i < etext.length; i++) {
+            var ch = etext.charAt(i);
+            var code = etext.charCodeAt(i);
+            var nc = (code < 256) ? ch : (Object.prototype.hasOwnProperty.call(lut, code) ? lut[code] : c + c.charAt(0));
+            result.push(nc);
+            lut[n] = c + nc.charAt(0);
+            n += 1;
+            c = nc;
+        }
+        return result.join('');
+    }
+
+    function veevJsInt(x) { var v = parseInt(x, 10); return isNaN(v) ? 0 : v; }
+
+    function veevBuildArray(encoded) {
+        var d = [], c = encoded.split('');
+        var count = veevJsInt(c.shift());
+        while (count) {
+            var arr = [];
+            for (var i = 0; i < count; i++) arr.unshift(veevJsInt(c.shift()));
+            d.push(arr);
+            count = veevJsInt(c.shift());
+        }
+        return d;
+    }
+
+    function veevUnhex(h) {
+        var out = '';
+        for (var i = 0; i < h.length; i += 2) {
+            out += String.fromCharCode(parseInt(h.substr(i, 2), 16));
+        }
+        // decodeURIComponent(escape(...)) dla UTF-8:
+        try { return decodeURIComponent(escape(out)); } catch (e) { return out; }
+    }
+
+    function veevDecodeUrl(etext, tarray) {
+        var ds = etext;
+        for (var i = 0; i < tarray.length; i++) {
+            var t = tarray[i];
+            if (t === 1) ds = ds.split('').reverse().join('');
+            ds = veevUnhex(ds);
+            ds = ds.replace(/dXRmOA==/g, '');
+        }
+        return ds;
+    }
+
+    async function veev(embedUrl) {
+        try {
+            var r = await K.http(embedUrl, { headers: { 'Referer': embedUrl } });
+            if (!r.resp.ok) { K.log('[veev] HTTP ' + r.resp.status); return null; }
+            var finalUrl = r.resp.url || embedUrl;
+            var mediaId = finalUrl.replace(/\/+$/, '').split('/').pop();
+            var items = [];
+            var re = /[\.\s'](?:fc|_vvto\[[^\]]*)(?:['\]]*)?\s*[:=]\s*['"]([^'"]+)/g;
+            var m;
+            while ((m = re.exec(r.body)) !== null) items.push(m[1]);
+            for (var i = items.length - 1; i >= 0; i--) {
+                var cand = items[i];
+                var ch = veevLzwDecode(cand);
+                if (ch === cand) continue;
+                var dl = finalUrl.replace(/\/[^\/]*$/, '') + '/dl?op=player_api&cmd=gi&file_code=' +
+                    encodeURIComponent(mediaId) + '&ch=' + encodeURIComponent(ch) + '&ie=1';
+                var dr = await K.http(dl, { headers: { 'Referer': embedUrl } });
+                if (!dr.resp.ok) continue;
+                var j;
+                try { j = JSON.parse(dr.body); } catch (e2) { continue; }
+                var file = j && j.file;
+                if (file && file.file_status === 'OK' && file.dv && file.dv[0] && file.dv[0].s) {
+                    var s = veevDecodeUrl(veevLzwDecode(file.dv[0].s), veevBuildArray(ch)[0]);
+                    if (s) return { url: s, quality: K.parseQuality(s), headers: { 'Referer': embedUrl, 'User-Agent': K.ua(0) } };
+                }
+                return null;
+            }
+            return null;
+        } catch (e) { K.log('[veev] ' + e.message); return null; }
+    }
+
+    // --- Unpacker Dean Edwardsa (eval(function(p,a,c,k,e,d)...)) -----------------
+    // Odkodowanie zaciemnionych skryptów hostów wideo (filemoon i pokrewne).
+    function unpackPacked(text) {
+        var re = /eval\s*\(\s*function\s*\(([^)]*)\)\s*\{[\s\S]*?\}\s*\(\s*'(.*?)'\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*'(.*?)'\.split\s*\(\s*'(\|)'\s*\)/;
+        var m = text.match(re);
+        if (!m) return text;
+        var payload = m[2], radix = parseInt(m[3], 10), count = parseInt(m[4], 10);
+        var keys = m[5].split('|');
+        var unpad = function (s, r) {
+            var out = '';
+            var v = parseInt(s, r);
+            if (isNaN(v)) return s;
+            var digits = '0123456789abcdefghijklmnopqrstuvwxyz'.slice(0, r);
+            while (v > 0) { out = digits.charAt(v % r) + out; v = Math.floor(v / r); }
+            return out || '0';
+        };
+        for (var i = count - 1; i >= 0; i--) {
+            var token = keys[i] || '';
+            if (!token) continue;
+            var pat = new RegExp('\\b' + unpad(i.toString(radix), radix) + '\\b', 'g');
+            payload = payload.replace(pat, token);
+        }
+        return payload;
+    }
+
+    // Fallback dla hostów typu filemoon: jeśli API byse zawiedzie, szukamy
+    // zapakowanego skryptu i wyciągamy plik m3u8/mp4.
+    async function filemoonUnpack(embedUrl) {
+        try {
+            var r = await K.http(embedUrl, { headers: { 'Referer': embedUrl } });
+            if (!r.resp.ok) return null;
+            var html = unpackPacked(r.body);
+            var m = html.match(/file\s*:\s*["']([^"']+\.(?:m3u8|mp4)[^"']*)["']/) ||
+                    html.match(/src\s*:\s*["']([^"']+\.(?:m3u8|mp4)[^"']*)["']/);
+            if (m) {
+                var u = m[1];
+                if (u.indexOf('//') === 0) u = 'https:' + u;
+                return { url: u, quality: K.parseQuality(u), headers: { 'Referer': embedUrl, 'User-Agent': K.ua(0) } };
+            }
+            return null;
+        } catch (e) { K.log('[filemoon] ' + e.message); return null; }
     }
 
     // --- Router po domenie -------------------------------------------------------
@@ -347,6 +475,7 @@ var __R = (function () {
         if (/vidmoly/.test(h)) return vidmoly(embedUrl);
         if (/fsst\.online|fsst/.test(h)) return fsst(embedUrl);
         if (/vidara\.(to|so)/.test(h)) return vidara(embedUrl);
+        if (/veev\.to|poophq|doods\.pro/.test(h)) return veev(embedUrl);
         if (BYSE_DOMAINS.test(h)) return byse(embedUrl, parentReferer);
         K.log('[auto] brak resolvera dla ' + h);
         return null;
@@ -354,6 +483,6 @@ var __R = (function () {
 
     return {
         cda: cda, streamtape: streamtape, sibnet: sibnet, vidmoly: vidmoly,
-        fsst: fsst, vidara: vidara, byse: byse, auto: auto, sha256: sha256
+        fsst: fsst, vidara: vidara, veev: veev, byse: byse, filemoonUnpack: filemoonUnpack, unpackPacked: unpackPacked, auto: auto, sha256: sha256
     };
 })();
