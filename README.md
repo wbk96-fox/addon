@@ -67,6 +67,15 @@ filtry antybotowe flagują Chrome bez tych nagłówków.
 gdy API hostów typu bys*/filemoon zawiedzie — odkodowuje zaciemnione skrypty
 i wyciąga bezpośrednie m3u8/mp4.
 
+**Doodstream** (`dood.*`, `ds2play`, `doods.pro`, `playmogo`…): pełny port
+ResolveURL — follow przekierowań hosta, iframe, wzorzec `dsplayer.hotkeys…makePlay`,
+dekodowanie pass_md5 (treść + 10 losowych znaków + token + timestamp).
+
+**player.pl (Player/TVN)** — API AndroidTV działa (item/search, playlisty), ale
+zawartość darmowa jest śladowa, a reszta za Widevine DRM (ITEM_NOT_PAID). Scraper
+nie ma sensu bez konta płatnego; ewentualnie do dodania w przyszłości przez
+`SCRAPER_SETTINGS.player_uid` (cookie użytkownika).
+
 **Wyszukiwanie wielotytułowe:** scrapery torrentów odpytują źródła po PL tytule,
 tytule oryginalnym i aliasach z TMDB (`alternative_titles`) — polskie tytuły
 release'ów z lektorem trafiają więc do wyników (w aplikacji, z kluczem TMDB).
@@ -137,7 +146,7 @@ Weryfikator replikuje ścieżkę aplikacji: manifest → pobranie plików → op
 `(function(){...})()` → `getStreams` → walidacja jak `parseJsonResults`
 (`url` niepusty, typy pól), dodatkowo spójność manifest↔pliki i testy LIVE.
 
-Ostatni wynik (2026-10-27, 11 scraperów, v2.2.0): **WSZYSTKIE KONTROLE OK** (testy LIVE włącznie).
+Ostatni wynik (2026-10-27, 11 scraperów, v2.3.0): **WSZYSTKIE KONTROLE OK** (testy LIVE włącznie).
 
 ## Ograniczenia (uczciwie)
 

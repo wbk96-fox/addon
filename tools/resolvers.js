@@ -464,6 +464,64 @@ var __R = (function () {
         } catch (e) { K.log('[filemoon] ' + e.message); return null; }
     }
 
+    // --- Doodstream (ResolveURL DoodstreamResolver; dood.* / ds2play / doods.pro…) --
+    // 1) GET /d/<id> (z follow), 2) iframe lub /d/→/e/, 3) „dsplayer.hotkeys …
+    // makePlay … return” → pass_md5 + token, 4) GET pass_md5 → URL bezpośredni
+    // (cloudflarestorage) albo treść + 10 losowych znaków + token + timestamp.
+    async function dood(embedUrl) {
+        try {
+            var hm = String(embedUrl).match(/^https?:\/\/([^\/]+)/);
+            if (!hm) return null;
+            var host = hm[1];
+            var idm = embedUrl.match(/(?:\/d\/|\/e\/|videoid=)([0-9a-zA-Z]+)/);
+            if (!idm) return null;
+            var known = /dood[a-z0-9.]*|ds2play\.com|ds2video\.com|doods\.pro|d0o0d\.com|do0od\.com|dooood\.com|myvidplay\.com|playmogo\.com/i;
+            if (!known.test(host)) host = 'playmogo.com';
+            var webUrl = 'https://' + host + '/d/' + idm[1];
+            var r1 = await K.http(webUrl);
+            if (!r1.resp.ok) { K.log('[dood] HTTP ' + r1.resp.status); return null; }
+            var finalUrl = r1.resp.url || webUrl;
+            var host2 = (finalUrl.match(/^https?:\/\/([^\/]+)/) || [0, host])[1];
+            if (host2 !== host) webUrl = 'https://' + host2 + '/d/' + idm[1];
+            var html = r1.body;
+            var url2 = webUrl;
+            var im = html.match(/<iframe\s*src="([^"]+)/);
+            if (im) {
+                url2 = /^https?:\/\//i.test(im[1]) ? im[1] : ('https://' + host2 + ('' + im[1]).charAt(0) === '/' ? 'https://' + host2 + im[1] : im[1]);
+                // uproszczenie: urljoin ręcznie
+                if (!/^https?:\/\//i.test(im[1])) url2 = 'https://' + host2 + (im[1].charAt(0) === '/' ? '' : '/') + im[1];
+                var r2 = await K.http(url2, { headers: { 'Referer': webUrl } });
+                if (!r2.resp.ok) return null;
+                html = r2.body;
+                finalUrl = r2.resp.url || url2;
+            } else {
+                var e2 = webUrl.replace('/d/', '/e/');
+                var r3 = await K.http(e2, { headers: { 'Referer': webUrl } });
+                if (!r3.resp.ok) return null;
+                html = r3.body;
+                finalUrl = r3.resp.url || e2;
+            }
+            var m = html.match(/dsplayer\.hotkeys[^']+'([^']+)[\s\S]+?function\s+makePlay[\s\S]+?return[^?]+([^"]+)/);
+            if (!m) { K.log('[dood] brak wzorca hotkeys'); return null; }
+            var token = m[2];
+            var passUrl = /^https?:\/\//i.test(m[1]) ? m[1] : (finalUrl.replace(/\/[^\/]*$/, '') + '/' + m[1].replace(/^\//, ''));
+            var r4 = await K.http(passUrl, { headers: { 'Referer': finalUrl } });
+            if (!r4.resp.ok) return null;
+            var body = String(r4.body).trim();
+            var vidSrc;
+            if (body.indexOf('cloudflarestorage.') >= 0) {
+                vidSrc = body;
+            } else {
+                var ab = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+                var rnd = '';
+                for (var i = 0; i < 10; i++) rnd += ab.charAt(Math.floor(Math.random() * ab.length));
+                vidSrc = body + rnd + token + Date.now();
+            }
+            if (vidSrc.indexOf('//') === 0) vidSrc = 'https:' + vidSrc;
+            return { url: vidSrc, quality: K.parseQuality(vidSrc), headers: { 'Referer': 'https://' + host2 + '/', 'User-Agent': K.ua(0) } };
+        } catch (e) { K.log('[dood] ' + e.message); return null; }
+    }
+
     // --- Router po domenie -------------------------------------------------------
     function hostOf(u) { var m = String(u).match(/^https?:\/\/([^\/?#]+)/); return m ? m[1].toLowerCase() : ''; }
 
@@ -476,6 +534,7 @@ var __R = (function () {
         if (/fsst\.online|fsst/.test(h)) return fsst(embedUrl);
         if (/vidara\.(to|so)/.test(h)) return vidara(embedUrl);
         if (/veev\.to|poophq|doods\.pro/.test(h)) return veev(embedUrl);
+        if (/dood[a-z0-9.]*\.(?:com|to|so|cx|la|ws|sh|co|pm|wf|re|yt|stream|watch)|ds2play\.com|ds2video\.com|d0o0d\.com|do0od\.com|dooood\.com|myvidplay\.com|playmogo\.com/i.test(h)) return dood(embedUrl);
         if (BYSE_DOMAINS.test(h)) return byse(embedUrl, parentReferer);
         K.log('[auto] brak resolvera dla ' + h);
         return null;
@@ -483,6 +542,6 @@ var __R = (function () {
 
     return {
         cda: cda, streamtape: streamtape, sibnet: sibnet, vidmoly: vidmoly,
-        fsst: fsst, vidara: vidara, veev: veev, byse: byse, filemoonUnpack: filemoonUnpack, unpackPacked: unpackPacked, auto: auto, sha256: sha256
+        fsst: fsst, vidara: vidara, veev: veev, dood: dood, byse: byse, filemoonUnpack: filemoonUnpack, unpackPacked: unpackPacked, auto: auto, sha256: sha256
     };
 })();

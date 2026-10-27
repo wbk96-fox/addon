@@ -1,7 +1,7 @@
 {
   "name": "Polskie Źródła PL",
-  "version": "2.2.0",
-  "description": "Repozytorium scraperów JS dla NuvioTV: polskie serwisy (MaxVOD, SerialeVIP, Frixysubs, Docchi, Bajeczki24) oraz indeksy torrentów (apibay, EZTV, YTS, BitSearch, TorrentDownload, Nyaa). Priorytetyzacja językowa z sygnaturami polskich grup sceny/p2p (BiA, BDC, VOiCE, MHT…), wykrywaniem wydań MULTi z polską ścieżką i tagów audio (PL.AC3, TrueHD…PL). Silnik resolverów (CDA, Streamtape, Sibnet, Vidmoly, Fsst, Vidara, Veev, Byse + Unpacker Dean Edwardsa), Client Hints, rotacja UA, cookie jar, ponawianie, wykrywanie Cloudflare.",
+  "version": "2.3.0",
+  "description": "Repozytorium scraperów JS dla NuvioTV: polskie serwisy (MaxVOD, SerialeVIP, Frixysubs, Docchi, Bajeczki24) oraz indeksy torrentów (apibay, EZTV, YTS, BitSearch, TorrentDownload, Nyaa). Priorytetyzacja językowa z sygnaturami polskich grup sceny/p2p (BiA, BDC, VOiCE, MHT…), wydania MULTi z polską ścieżką i tagi audio (PL.AC3, TrueHD…PL). Silnik resolverów (CDA, Streamtape, Sibnet, Vidmoly, Fsst, Vidara, Veev, Doodstream, Byse + Unpacker Dean Edwardsa), Client Hints, rotacja UA, cookie jar, ponawianie, wykrywanie Cloudflare.",
   "author": "NuvioTV PL",
   "scrapers": [
     {
